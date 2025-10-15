@@ -1,0 +1,71 @@
+{
+  "Entrantes": [
+    {
+      "nombre": "Gyozas de pollo",
+      "precio": "6.50",
+      "alergenos": [
+        "gluten",
+        "soja"
+      ],
+      "descripcion": "Plancha, salsa ponzu."
+    },
+    {
+      "nombre": "Hummus con crudités",
+      "precio": "5.50",
+      "alergenos": [
+        "sésamo"
+      ],
+      "descripcion": "Garbanzos, tahini, AOVE."
+    }
+  ],
+  "Principales": [
+    {
+      "nombre": "Burger CartAI",
+      "precio": "11.90",
+      "alergenos": [
+        "gluten",
+        "lácteos",
+        "huevo",
+        "sésamo"
+      ],
+      "descripcion": "Queso cheddar, pan brioche, salsa de la casa."
+    },
+    {
+      "nombre": "Bowl thai de pollo",
+      "precio": "10.90",
+      "alergenos": [
+        "soja",
+        "cacahuete"
+      ],
+      "descripcion": "Arroz jazmín, verduras salteadas, cacahuete."
+    }
+  ],
+  "Postres": [
+    {
+      "nombre": "Coulant de chocolate",
+      "precio": "4.90",
+      "alergenos": [
+        "gluten",
+        "huevo",
+        "lácteos"
+      ],
+      "descripcion": "Centro fundente, helado vainilla."
+    }
+  ],
+  "Bebidas": [
+    {
+      "nombre": "IPA artesanal 33cl",
+      "precio": "3.50",
+      "alergenos": [
+        "gluten"
+      ],
+      "descripcion": "Cítrica y aromática."
+    },
+    {
+      "nombre": "Kombucha original",
+      "precio": "3.20",
+      "alergenos": [],
+      "descripcion": "Fermentada, baja en azúcar."
+    }
+  ]
+}

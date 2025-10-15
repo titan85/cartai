@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CartAI — Carta inteligente con IA</title>
+  <meta name="theme-color" content="#0e1116">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icon-512.png" sizes="512x512">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand">
+      <img src="assets/icon-512.png" alt="CartAI">
+      <span>CartAI</span>
+    </div>
+    <div class="meta">Carta inteligente · PWA</div>
+  </nav>
+
+  <div class="container">
+    <div class="notice">
+      Edita la carta en Google Sheets (super fácil). Pon tu <b>SHEET_ID</b> y <b>sheetName</b> abajo.
+    </div>
+
+    <section id="carta"></section>
+
+    <section class="footer">© CartAI — Carta interactiva con IA</section>
+  </div>
+
+  <button id="cartai-chat-fab" title="Habla con el asistente">💬</button>
+
+  <script>
+    // ========= CONFIG =========
+    // 1) Tu Google Sheet (dejar vacío para usar carta.json local)
+    const SHEET_ID = "";         // ej: '1AbCDEFghiJKL...'
+    const SHEET_NAME = "Sheet1"; // nombre de pestaña
+
+    // 2) URL de tu GPT (se abrirá en popup centrado)
+    const CHAT_URL = "https://chat.openai.com/"; // cambia por tu GPT público
+    // ==========================
+
+    function euros(n){ try{ return (parseFloat(n)).toFixed(2).replace('.', ',') } catch(e){ return n } }
+
+    async function fetchFromSheet(sheetId, sheetName='Sheet1'){
+      const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+      const res = await fetch(url);
+      const text = await res.text();
+      const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}')+1));
+      const rows = json.table.rows;
+      const cols = json.table.cols.map(c => c.label);
+      const items = rows.map(r => {
+        const obj = {};
+        r.c.forEach((cell, i) => obj[cols[i]] = cell ? cell.v : "");
+        return obj;
+      });
+      return items.filter(i => (String(i.visible||'si').toLowerCase() === 'si'));
+    }
+
+    async function fetchLocal(){
+      const res = await fetch('carta.json');
+      const data = await res.json();
+      const items = [];
+      Object.entries(data).forEach(([cat, platos]) => {
+        platos.forEach(p => items.push({
+          categoria: cat, nombre: p.nombre, precio: p.precio,
+          alergenos: (p.alergenos||[]).join(', '), descripcion: p.descripcion, visible: 'si'
+        }));
+      });
+      return items;
+    }
+
+    function groupBy(arr, key){
+      return arr.reduce((acc,it)=>{const k=it[key]||'Otros'; (acc[k]=acc[k]||[]).push(it); return acc},{});
+    }
+
+    function render(items){
+      const mount = document.getElementById('carta');
+      mount.innerHTML = "";
+      const byCat = groupBy(items, 'categoria');
+
+      Object.keys(byCat).forEach(cat => {
+        const section = document.createElement('section');
+        section.className = 'section';
+
+        const header = document.createElement('h3');
+        header.textContent = cat;
+        section.appendChild(header);
+
+        const grid = document.createElement('div');
+        grid.className = 'grid';
+
+        byCat[cat].forEach(p => {
+          const card = document.createElement('div');
+          card.className = 'item';
+          const alerg = (p.alergenos||"").split(',').map(s=>s.trim()).filter(Boolean);
+
+          card.innerHTML = `
+            <h4>${p.nombre}</h4>
+            <p>${p.descripcion||''}</p>
+            <div class="badges">${alerg.length ? alerg.map(a=>`<span class="badge">${a}</span>`).join(' ') : '<span class="badge">Sin alérgenos</span>'}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+              <div class="price">${euros(p.precio)}€</div>
+              <button class="btn" data-name="${p.nombre}">Consultar</button>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+
+        section.appendChild(grid);
+        mount.appendChild(section);
+      });
+
+      // Acciones de "Consultar" para abrir chat contextual (popup)
+      mount.querySelectorAll('.btn').forEach(btn => {
+        btn.addEventListener('click', () => openChatPopup(CHAT_URL, 560, 740));
+      });
+    }
+
+    async function init(){
+      try{
+        const items = SHEET_ID ? await fetchFromSheet(SHEET_ID, SHEET_NAME) : await fetchLocal();
+        render(items);
+      }catch(e){
+        console.error("Fallo Google Sheets, usando carta.json", e);
+        const items = await fetchLocal();
+        render(items);
+      }
+    }
+
+    function openChatPopup(url, w=520, h=720){
+      const left = (screen.width/2) - (w/2);
+      const top = (screen.height/2) - (h/2);
+      window.open(url, 'CartAI-Assistant', `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${w},height=${h},top=${top},left=${left}`);
+    }
+
+    document.getElementById('cartai-chat-fab').addEventListener('click', () => openChatPopup(CHAT_URL));
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js'));
+    }
+
+    init();
+  </script>
+</body>
+</html>
