@@ -20,7 +20,7 @@
 
   <div class="container">
     <div class="notice">
-      Edita la carta en Google Sheets (super fácil). Pon tu <b>SHEET_ID</b> y <b>sheetName</b> abajo.
+      Edita la carta en Google Sheets (súper fácil). Pon tu <b>SHEET_ID</b> y <b>SHEET_NAME</b> abajo.
     </div>
 
     <section id="carta"></section>
@@ -28,20 +28,38 @@
     <section class="footer">© CartAI — Carta interactiva con IA</section>
   </div>
 
+  <!-- FAB abre el chat embebido -->
   <button id="cartai-chat-fab" title="Habla con el asistente">💬</button>
+
+  <!-- CHAT EMBEBIDO -->
+  <div class="chat-overlay" id="chatOverlay" hidden>
+    <div class="chat-panel">
+      <div class="chat-header">
+        <div class="chat-title">
+          <img src="assets/icon-512.png" alt="CartAI"><span>Asistente CartAI</span>
+        </div>
+        <button class="chat-close" id="chatClose" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+      <div class="chat-input">
+        <input id="chatText" type="text" placeholder="Pregunta por alérgenos, medias raciones, precios, recomendaciones…" autocomplete="off" />
+        <button id="chatSend" class="btn">Enviar</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     // ========= CONFIG =========
     // 1) Tu Google Sheet (dejar vacío para usar carta.json local)
     const SHEET_ID = "";         // ej: '1AbCDEFghiJKL...'
     const SHEET_NAME = "Sheet1"; // nombre de pestaña
-
-    // 2) URL de tu GPT (se abrirá en popup centrado)
-    const CHAT_URL = "https://chatgpt.com/g/g-68f020f9a81481919b01bfea89178be2-cartai-assistant"; // cambia por tu GPT público
     // ==========================
 
+    /* Utilidades */
     function euros(n){ try{ return (parseFloat(n)).toFixed(2).replace('.', ',') } catch(e){ return n } }
+    const norm = s => (s||"").toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+    /* Carga carta */
     async function fetchFromSheet(sheetId, sheetName='Sheet1'){
       const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
       const res = await fetch(url);
@@ -101,7 +119,7 @@
             <div class="badges">${alerg.length ? alerg.map(a=>`<span class="badge">${a}</span>`).join(' ') : '<span class="badge">Sin alérgenos</span>'}</div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
               <div class="price">${euros(p.precio)}€</div>
-              <button class="btn" data-name="${p.nombre}">Consultar</button>
+              <button class="btn consult-btn" data-name="${p.nombre}">Consultar</button>
             </div>
           `;
           grid.appendChild(card);
@@ -111,31 +129,180 @@
         mount.appendChild(section);
       });
 
-      // Acciones de "Consultar" para abrir chat contextual (popup)
-      mount.querySelectorAll('.btn').forEach(btn => {
-        btn.addEventListener('click', () => openChatPopup(CHAT_URL, 560, 740));
+      // “Consultar” abre chat pre-rellenado
+      mount.querySelectorAll('.consult-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const name = e.currentTarget.dataset.name;
+          openChat();
+          addUserMsg(`Info de "${name}"`);
+          handleQuestion(`info ${name}`);
+        });
       });
     }
 
+    // ========= CHAT EMBEBIDO (motor smart retrieval sin LLM) =========
+    let MENU = []; // items: {categoria, nombre, precio, alergenos, descripcion}
+    const elOverlay = document.getElementById('chatOverlay');
+    const elMessages = document.getElementById('chatMessages');
+    const elText = document.getElementById('chatText');
+
+    function openChat(){
+      elOverlay.hidden = false;
+      setTimeout(()=>elText.focus(), 50);
+      if (!elMessages.dataset.greeted){
+        addBotMsg("Hola 👋 Soy el asistente de CartAI. Pregunta por <b>alérgenos</b>, <b>medias raciones</b>, <b>precios</b> o pídeme <b>recomendaciones</b> (carne, pescado, sin gluten, sin lácteos…).");
+        elMessages.dataset.greeted = "1";
+      }
+    }
+    function closeChat(){ elOverlay.hidden = true; }
+    document.getElementById('cartai-chat-fab').addEventListener('click', openChat);
+    document.getElementById('chatClose').addEventListener('click', closeChat);
+    elOverlay.addEventListener('click', (e)=>{ if(e.target===elOverlay) closeChat(); });
+
+    function addMsg(html, who='user'){
+      const wrap = document.createElement('div');
+      wrap.className = 'chat-msg ' + who;
+      wrap.innerHTML = html;
+      elMessages.appendChild(wrap);
+      elMessages.scrollTop = elMessages.scrollHeight;
+    }
+    const addUserMsg = (t)=> addMsg(`<div class="bubble">${t}</div>`,'user');
+    const addBotMsg  = (t)=> addMsg(`<div class="bubble">${t}</div>`,'bot');
+
+    // Indexación ligera por nombre y alérgenos
+    function findDish(query){
+      const q = norm(query);
+      // busca por nombre
+      let best = MENU.filter(i => norm(i.nombre).includes(q));
+      if (best.length) return best;
+      // busca por categoría
+      best = MENU.filter(i => norm(i.categoria).includes(q));
+      if (best.length) return best;
+      return [];
+    }
+    function parseAllergens(s){ return (s||"").split(',').map(x=>norm(x.trim())).filter(Boolean); }
+
+    function handleQuestion(text){
+      const q = norm(text);
+
+      // Detectores básicos
+      const askAllergens = /(alergen|gluten|lacte|huevo|soja|fruto seco|cacahuete|sesamo|molusc)/.test(q);
+      const askHalf = /(media racion|media|mitad|1\/2)/.test(q);
+      const askPrice = /(precio|cuesta|vale)/.test(q);
+      const askRecommend = /(recomienda|recomendaci|suger|que pedir|que me recomiendas)/.test(q);
+
+      // Si el usuario menciona un plato concreto
+      const dishMatch = q.match(/info (.+)$|de (.+)$|sobre (.+)$|croqueta|tortilla|calamar|burger|bowl|gyoza|hummus|coulant|ipa|kombucha/);
+      let dishes = [];
+      if (dishMatch) {
+        const raw = (dishMatch[1]||dishMatch[2]||dishMatch[3]||"").trim();
+        dishes = raw ? findDish(raw) : [];
+        if (!dishes.length && raw) {
+          // aproximación: busca por tokens
+          const tokens = raw.split(/\s+/).map(norm);
+          dishes = MENU.filter(d => tokens.some(t => norm(d.nombre).includes(t)));
+        }
+      }
+
+      // Respuestas
+      if (askRecommend && !dishes.length){
+        return addBotMsg(recommendFromMenu(q));
+      }
+
+      if (dishes.length){
+        const d = dishes[0];
+        const alergs = parseAllergens(d.alergenos);
+        const alergos = alergs.length ? d.alergenos : "Sin alérgenos declarados";
+        let out = `<b>${d.nombre}</b> — ${euros(d.precio)}€<br>${d.descripcion||''}<br><small><b>Alérgenos:</b> ${alergos}</small>`;
+
+        if (askAllergens) {
+          return addBotMsg(out);
+        }
+        if (askPrice) {
+          return addBotMsg(`<b>${d.nombre}</b> cuesta <b>${euros(d.precio)}€</b>. ${d.descripcion?('<br>'+d.descripcion):''}`);
+        }
+        if (askHalf) {
+          return addBotMsg(`La <b>media ración</b> depende del local. ¿Quieres que avise al camarero? Habitualmente, si se ofrece, es un <b>~60% del precio</b>.`);
+        }
+        // por defecto: ficha del plato
+        return addBotMsg(out);
+      }
+
+      // Pregunta general sobre alérgenos (sin plato)
+      if (askAllergens && !dishes.length){
+        const allergen = (q.match(/gluten|lacte|huevo|soja|sesamo|cacahuete|molusc|fruto seco/)||[])[0] || '';
+        if (allergen){
+          const matches = MENU.filter(d => parseAllergens(d.alergenos).some(a => a.includes(allergen.startsWith('lacte')?'lact':'gluten'.slice(0,6))) );
+          if (matches.length){
+            const list = matches.slice(0,8).map(d=>`• ${d.nombre} (${euros(d.precio)}€)`).join('<br>');
+            return addBotMsg(`Platos que <b>contienen ${allergen}</b>:<br>${list}`);
+          } else {
+            return addBotMsg(`No veo platos con <b>${allergen}</b> en la carta actual.`);
+          }
+        }
+        return addBotMsg(`Dime el alérgeno (p.ej. “sin gluten”, “contiene huevo”) o menciona un plato concreto.`);
+      }
+
+      // Sin plato detectado: intenta ayudar
+      if (askPrice) return addBotMsg(`Dime el nombre del plato para decirte el precio exacto.`);
+      if (askHalf)  return addBotMsg(`Dime el plato y te digo si suele ofrecerse en media ración o te contacto con el camarero.`);
+      if (askRecommend) return addBotMsg(recommendFromMenu(q));
+
+      // Fallback
+      addBotMsg(`Puedo ayudarte con <b>alérgenos</b>, <b>precios</b>, <b>medias raciones</b> y <b>recomendaciones</b>. Prueba: “¿Las gyozas llevan gluten?”, “Precio de la burger”, “Sin lactosa”.`);
+    }
+
+    function recommendFromMenu(q){
+      const wantNo = (kw) => /(sin |no )/.test(q) && new RegExp(kw).test(q);
+      const noGluten = wantNo('gluten');
+      const noLact  = wantNo('lacte');
+      const tokens = MENU.map(d => ({...d, score: 0}));
+
+      tokens.forEach(t=>{
+        const al = norm(t.alergenos);
+        if (noGluten && al.includes('gluten')) t.score -= 5;
+        if (noLact && al.includes('lact')) t.score -= 5;
+        if (/carne|burger|ternera/.test(q) && /burger|carne|ternera/i.test(t.nombre)) t.score += 3;
+        if (/pescado|mar|calamar|romana/.test(q) && /calamar|mar/i.test(norm(t.nombre))) t.score += 3;
+        if (/veg|vegetar/.test(q) && /(hummus|ensalada|veg)/i.test(norm(t.nombre))) t.score += 3;
+        if (/dulce|postre|tarta|coulant/.test(q) && /(coulant|tarta|postre)/i.test(norm(t.nombre))) t.score += 3;
+        // base por precio medio
+        const pr = parseFloat(t.precio||0);
+        if (!isNaN(pr) && pr <= 8) t.score += 1;
+      });
+
+      const top = tokens.sort((a,b)=>b.score-a.score).slice(0,3);
+      if (!top.length) return `¿Prefieres carne, pescado, vegetariano o dulce? Te sugiero en base a eso.`;
+      return `Te puedo recomendar:<br>` + top.map(t=>`• <b>${t.nombre}</b> (${euros(t.precio)}€) — ${t.descripcion||''}`).join('<br>');
+    }
+
+    // Eventos chat
+    document.getElementById('chatSend').addEventListener('click', ()=>{
+      const t = elText.value.trim();
+      if(!t) return;
+      addUserMsg(t);
+      elText.value = '';
+      handleQuestion(t);
+    });
+    elText.addEventListener('keydown', (e)=>{
+      if(e.key==='Enter'){ e.preventDefault(); document.getElementById('chatSend').click(); }
+    });
+
+    // Init
     async function init(){
       try{
         const items = SHEET_ID ? await fetchFromSheet(SHEET_ID, SHEET_NAME) : await fetchLocal();
+        MENU = items;
         render(items);
       }catch(e){
         console.error("Fallo Google Sheets, usando carta.json", e);
         const items = await fetchLocal();
+        MENU = items;
         render(items);
       }
     }
 
-    function openChatPopup(url, w=520, h=720){
-      const left = (screen.width/2) - (w/2);
-      const top = (screen.height/2) - (h/2);
-      window.open(url, 'CartAI-Assistant', `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${w},height=${h},top=${top},left=${left}`);
-    }
-
-    document.getElementById('cartai-chat-fab').addEventListener('click', () => openChatPopup(CHAT_URL));
-
+    // PWA
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js'));
     }
