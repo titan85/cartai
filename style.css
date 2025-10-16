@@ -30,9 +30,8 @@ body{
 .brand img{width:28px; height:28px; border-radius:8px}
 .brand span{background: linear-gradient(90deg, var(--accent), var(--accent-2));
   -webkit-background-clip:text; background-clip:text; color:transparent;}
-.meta{
-  color:var(--muted); font-size:13px;
-}
+.meta{ color:var(--muted); font-size:13px; }
+
 .section{
   background: var(--card);
   border: 1px solid var(--border);
@@ -66,16 +65,57 @@ body{
 }
 .footer{color:#8ea1b8; text-align:center; font-size:12px; padding:30px 0 80px}
 
-/* Floating Chat FAB */
+/* Floating FAB */
 #cartai-chat-fab{
   position: fixed; right: 20px; bottom: 20px;
   width: 64px; height: 64px; border-radius: 18px; border: 1px solid var(--border);
   background: radial-gradient(120% 120% at 20% 10%, rgba(58,166,255,.25), transparent 40%), #121826;
   color: white; font-size: 26px; box-shadow: 0 18px 42px rgba(0,0,0,.5);
-  cursor: pointer; z-index: 9999; transition: transform .08s ease, box-shadow .2s ease, border-color .2s ease;
+  cursor: pointer; z-index: 999; transition: transform .08s ease, box-shadow .2s ease, border-color .2s ease;
 }
 #cartai-chat-fab:hover{ box-shadow: 0 22px 64px rgba(0,0,0,.6); border-color:#2a3852 }
 #cartai-chat-fab:active{ transform: translateY(1px) scale(.99) }
+
+/* Chat overlay */
+.chat-overlay{
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  display:flex; align-items:flex-end; justify-content:center; padding: 18px;
+  z-index: 1000;
+}
+.chat-panel{
+  width: 100%; max-width: 720px; background: var(--panel);
+  border:1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow);
+  display:flex; flex-direction:column; max-height: 80vh;
+}
+.chat-header{
+  display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; border-bottom:1px solid var(--border);
+  background: linear-gradient(180deg, rgba(26,32,44,.9), rgba(20,25,34,.9));
+  border-top-left-radius: 16px; border-top-right-radius: 16px;
+}
+.chat-title{display:flex; align-items:center; gap:10px; font-weight:700}
+.chat-title img{width:20px; height:20px; border-radius:6px}
+.chat-title span{letter-spacing:.2px}
+.chat-close{
+  background: transparent; color:#9fb0c3; border:1px solid var(--border); border-radius:10px; padding:6px 10px; cursor:pointer;
+}
+.chat-close:hover{ color:#dbe7f7; border-color:#415271 }
+
+.chat-messages{
+  padding: 12px; overflow:auto; display:flex; flex-direction:column; gap:10px; min-height: 200px;
+}
+.chat-msg .bubble{
+  display:inline-block; padding:10px 12px; border-radius: 12px; line-height:1.35;
+}
+.chat-msg.user{ text-align:right }
+.chat-msg.user .bubble{ background:#1e2736; border:1px solid #2a3852 }
+.chat-msg.bot .bubble{ background:#111826; border:1px solid #2a3852; color:#d7e6f7 }
+
+.chat-input{
+  display:flex; gap:8px; padding: 10px; border-top:1px solid var(--border); background:#121723; border-bottom-left-radius: 16px; border-bottom-right-radius:16px;
+}
+.chat-input input{
+  flex:1; background:#0f141d; color:#dbe7f7; border:1px solid #2a3852; border-radius:10px; padding:10px 12px;
+}
 .btn{
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
   color:#0b0f16; font-weight:700; border:none; padding:10px 14px; border-radius:10px; cursor:pointer
